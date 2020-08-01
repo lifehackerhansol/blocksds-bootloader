@@ -215,6 +215,7 @@ void resetMemory_ARM7 (void)
 
 	arm7clearRAM();
 
+	*(u32*)(0x2FFFD9C) = 0;	// Clear exception handler
 	REG_IE = 0;
 	REG_IF = ~0;
 	(*(vu32*)(0x04000000-4)) = 0;  //IRQ_HANDLER ARM7 version
