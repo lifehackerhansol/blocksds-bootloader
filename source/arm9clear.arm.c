@@ -20,7 +20,7 @@ Written by Darkain.
 Modified by Chishm:
  * Changed MultiNDS specific stuff
 --------------------------------------------------------------------------*/
-void __attribute__ ((long_call)) __attribute__((naked)) __attribute__((noreturn)) resetMemory2_ARM9 (void) 
+ARM_CODE void __attribute__ ((long_call)) __attribute__((naked)) __attribute__((noreturn)) resetMemory2_ARM9 (void) 
 {
  	register int i;
   
@@ -78,7 +78,7 @@ Written by Darkain.
 Modified by Chishm:
  * Removed MultiNDS specific stuff
 --------------------------------------------------------------------------*/
-void __attribute__ ((long_call)) __attribute__((noreturn)) __attribute__((naked)) startBinary_ARM9 (void)
+ARM_CODE void __attribute__ ((long_call)) __attribute__((noreturn)) __attribute__((naked)) startBinary_ARM9 (void)
 {
 	REG_IME=0;
 	REG_EXMEMCNT = 0xE880;

@@ -1,123 +1,208 @@
-#---------------------------------------------------------------------------------
-.SUFFIXES:
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM)
+# SPDX-License-Identifier: CC0-1.0
+#
+# SPDX-FileContributor: Antonio Niño Díaz, 2023
+
+export BLOCKSDS			?= /opt/blocksds/core
+export BLOCKSDSEXT		?= /opt/blocksds/external
+
+export WONDERFUL_TOOLCHAIN	?= /opt/wonderful
+ARM_NONE_EABI_PATH	?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
+
+# Source code paths
+# -----------------
+
+SOURCEDIRS	:= source
+INCLUDEDIRS	:=
+BINDIRS		:=
+
+# Defines passed to all files
+# ---------------------------
+
+DEFINES		:=
+
+ifneq ($(strip $(NO_SDMMC)),)
+DEFINES		+= -DNO_SDMMC
 endif
 
--include $(DEVKITARM)/ds_rules
+ifneq ($(strip $(NO_DLDI)),)
+DEFINES		+= -DNO_DLDI
+endif
 
-#---------------------------------------------------------------------------------
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# INCLUDES is a list of directories containing extra header files
-#---------------------------------------------------------------------------------
-TARGET		:=	load
-BUILD		?=	build
-SOURCES		:=	source source/patches 
-INCLUDES	:=	build
-SPECS		:=  specs
- 
-#---------------------------------------------------------------------------------
-# options for code generation
-#---------------------------------------------------------------------------------
-ARCH	:=	-mthumb -mthumb-interwork
+# Libraries
+# ---------
 
-CFLAGS	:=	-g -Wall -Os\
-			-mcpu=arm7tdmi -mtune=arm7tdmi -fomit-frame-pointer\
-			-ffast-math \
-			$(ARCH)
+LIBS		:= -lnds7
+LIBDIRS		:= $(BLOCKSDS)/libs/libnds
 
-CFLAGS	+=	$(INCLUDE) $(EXTRA_CFLAGS) -DARM7
+# Build artifacts
+# -----------------
 
-ASFLAGS	:=	-g $(ARCH) $(EXTRA_CFLAGS) $(INCLUDE)
-LDFLAGS	=	-nostartfiles -T $(TOPDIR)/load.ld -Wl,--no-warn-rwx-segments -g $(ARCH) -Wl,-Map,$(TARGET).map
+NAME		:= $(shell basename $(CURDIR))
+BUILDDIR	:= build/$(NAME)
+ELF		:= build/$(NAME).elf
+DUMP		:= build/$(NAME).dump
+MAP		:= build/$(NAME).map
+export LOADBIN ?= $(CURDIR)/$(NAME).bin
 
-LIBS	:= 
+# Tools
+# -----
 
-#---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
-LIBDIRS	:=	$(LIBNDS)
- 
-  
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
-#---------------------------------------------------------------------------------
-ifneq ($(BUILD),$(notdir $(CURDIR)))
-#---------------------------------------------------------------------------------
- 
-export TOPDIR	:=	$(CURDIR)
-export LOADBIN	?=	$(CURDIR)/$(TARGET).bin
-export LOADELF	:=	$(CURDIR)/$(TARGET).elf
-export DEPSDIR	:=	$(CURDIR)/$(BUILD)
+PREFIX		:= $(ARM_NONE_EABI_PATH)arm-none-eabi-
+CC		:= $(PREFIX)gcc
+CXX		:= $(PREFIX)g++
+LD		:= $(PREFIX)gcc
+OBJCOPY		:= $(PREFIX)objcopy
+OBJDUMP		:= $(PREFIX)objdump
+MKDIR		:= mkdir
+RM		:= rm -rf
 
-export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
- 
-export CC		:=	$(PREFIX)gcc
-export CXX		:=	$(PREFIX)g++
-export AR		:=	$(PREFIX)ar
-export OBJCOPY	:=	$(PREFIX)objcopy
- 
-CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
-CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
- 
-export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
- 
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-					-I$(CURDIR)/$(BUILD)
- 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+# Verbose flag
+# ------------
 
-#---------------------------------------------------------------------------------
-# use CC for linking standard C
-#---------------------------------------------------------------------------------
-export LD	:=	$(CC)
-#---------------------------------------------------------------------------------
-
-.PHONY: $(BUILD) clean
- 
-#---------------------------------------------------------------------------------
-$(BUILD):
-	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) -C $(BUILD) -f $(CURDIR)/Makefile 
- 
-#---------------------------------------------------------------------------------
-clean:
-	@echo clean ...
-	@rm -fr $(BUILD) *.elf *.bin
- 
- 
-#---------------------------------------------------------------------------------
+ifeq ($(VERBOSE),1)
+V		:=
 else
- 
-DEPENDS	:=	$(OFILES:.o=.d)
- 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
-$(LOADBIN)	:	$(LOADELF)
+V		:= @
+endif
+
+# Source files
+# ------------
+
+ifneq ($(BINDIRS),)
+    SOURCES_BIN	:= $(shell find -L $(BINDIRS) -name "*.bin")
+    INCLUDEDIRS	+= $(addprefix $(BUILDDIR)/,$(BINDIRS))
+endif
+
+SOURCES_S	:= $(shell find -L $(SOURCEDIRS) -name "*.s")
+SOURCES_C	:= $(shell find -L $(SOURCEDIRS) -name "*.c")
+SOURCES_CPP	:= $(shell find -L $(SOURCEDIRS) -name "*.cpp")
+
+# Compiler and linker flags
+# -------------------------
+
+ARCH		:= -mthumb -mthumb-interwork -mcpu=arm7tdmi
+
+SPECS		:= $(CURDIR)/load.specs
+
+WARNFLAGS	:= -Wall
+
+ifeq ($(SOURCES_CPP),)
+	LIBS	+= -lc
+else
+	LIBS	+= -lstdc++ -lc
+endif
+
+INCLUDEFLAGS	:= $(foreach path,$(INCLUDEDIRS),-I$(path)) \
+		   $(foreach path,$(LIBDIRS),-I$(path)/include)
+
+LIBDIRSFLAGS	:= $(foreach path,$(LIBDIRS),-L$(path)/lib)
+
+ASFLAGS		+= -x assembler-with-cpp $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -ffunction-sections -fdata-sections
+
+CFLAGS		+= -std=gnu17 $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -Oz -flto -ffunction-sections -fdata-sections \
+		   -specs=$(SPECS)
+
+CXXFLAGS	+= -std=gnu++17 $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -Oz -flto -ffunction-sections -fdata-sections \
+		   -fno-exceptions -fno-rtti \
+		   -specs=$(SPECS)
+
+LDFLAGS		+= $(ARCH) $(LIBDIRSFLAGS) -Wl,-Map,$(MAP) $(DEFINES) \
+		   -Wl,--start-group $(LIBS) -Wl,--end-group -specs=$(SPECS) -nostartfiles
+
+# Intermediate build files
+# ------------------------
+
+OBJS_ASSETS	:= $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_BIN)))
+
+HEADERS_ASSETS	:= $(patsubst %.bin,%_bin.h,$(addprefix $(BUILDDIR)/,$(SOURCES_BIN)))
+
+OBJS_SOURCES	:= $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_S))) \
+		   $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_C))) \
+		   $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_CPP)))
+
+OBJS		:= $(OBJS_ASSETS) $(OBJS_SOURCES)
+
+DEPS		:= $(OBJS:.o=.d)
+
+# Targets
+# -------
+
+.PHONY: all clean dump
+
+all: $(LOADBIN)
+
+$(LOADBIN): $(ELF)
+	@echo "  OBJCOPY $@"
 	@$(OBJCOPY) -O binary $< $@
-	@echo built ... $(notdir $@)
 
+$(ELF): $(OBJS)
+	@echo "  LD.7    $@"
+	$(V)$(LD) -o $@ $(OBJS) $(LDFLAGS)
 
-$(LOADELF)	: $(OFILES)
-	@echo linking $(notdir $@)
-	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
-
-arm9mpu_reset.o: mpu_reset.bin
+$(DUMP): $(ELF)
+	@echo "  OBJDUMP.7 $@"
+	$(V)$(OBJDUMP) -h -C -S $< > $@
 
 mpu_reset.bin: mpu_reset.elf
-	$(OBJCOPY) -O binary $< $@
+	@echo "  OBJCOPY $@"
+	@$(OBJCOPY) -O binary $< $@
 
-mpu_reset.elf: $(TOPDIR)/arm9code/mpu_reset.s
-	$(CC) $(ASFLAGS) -Ttext=0 -x assembler-with-cpp -nostartfiles -nostdlib $< -o $@
+mpu_reset.elf: $(CURDIR)/arm9code/mpu_reset.s
+	@echo "  AS.9      $<"
+	$(V)$(CC) $(ASFLAGS) -Ttext=0 -x assembler-with-cpp -nostartfiles -nostdlib $< -o $@
 
--include $(DEPENDS)
-#---------------------------------------------------------------------------------------
-endif
-#---------------------------------------------------------------------------------------
+dump: $(DUMP)
+
+clean:
+	@echo "  CLEAN.7"
+	$(V)$(RM) $(ELF) $(DUMP) $(MAP) $(BUILDDIR) $(LOADBIN) mpu_reset.*
+
+# Rules
+# -----
+
+# Add explicit dependency for this file which needs mpu_reset built for arm9
+$(BUILDDIR)/source/arm9mpu_reset.s.o: mpu_reset.bin
+
+$(BUILDDIR)/%.s.o : %.s
+	@echo "  AS.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(ASFLAGS) -MMD -MP -c -o $@ $<
+
+$(BUILDDIR)/%.c.o : %.c
+	@echo "  CC.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+$(BUILDDIR)/%.arm.c.o : %.arm.c
+	@echo "  CC.7    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -marm -mlong-calls -c -o $@ $<
+
+$(BUILDDIR)/%.cpp.o : %.cpp
+	@echo "  CXX.7   $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CXX) $(CXXFLAGS) -MMD -MP -c -o $@ $<
+
+$(BUILDDIR)/%.arm.cpp.o : %.arm.cpp
+	@echo "  CXX.7   $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CXX) $(CXXFLAGS) -MMD -MP -marm -mlong-calls -c -o $@ $<
+
+$(BUILDDIR)/%.bin.o $(BUILDDIR)/%_bin.h : %.bin
+	@echo "  BIN2C.7 $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(BLOCKSDS)/tools/bin2c/bin2c $< $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c -o $(BUILDDIR)/$*.bin.o $(BUILDDIR)/$*_bin.c
+
+# All assets must be built before the source code
+# -----------------------------------------------
+
+$(SOURCES_S) $(SOURCES_C) $(SOURCES_CPP): $(HEADERS_ASSETS)
+
+# Include dependency files if they exist
+# --------------------------------------
+
+-include $(DEPS)
