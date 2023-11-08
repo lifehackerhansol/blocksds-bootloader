@@ -5,6 +5,9 @@
 BLOCKSDS	?= /opt/blocksds/core
 BLOCKSDSEXT	?= /opt/blocksds/external
 
+WONDERFUL_TOOLCHAIN	?= /opt/wonderful
+ARM_NONE_EABI_PATH	?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
+
 # Source code paths
 # -----------------
 
@@ -20,7 +23,7 @@ DEFINES		:=
 # Libraries
 # ---------
 
-LIBS		:=
+LIBS		:= -lnds7
 LIBDIRS		:= $(BLOCKSDS)/libs/libnds
 
 # Build artifacts
@@ -36,7 +39,7 @@ export LOADBIN ?= $(CURDIR)/$(NAME).bin
 # Tools
 # -----
 
-PREFIX		:= arm-none-eabi-
+PREFIX		:= $(ARM_NONE_EABI_PATH)arm-none-eabi-
 CC		:= $(PREFIX)gcc
 CXX		:= $(PREFIX)g++
 OBJCOPY		:= $(PREFIX)objcopy
