@@ -2,10 +2,10 @@
 #
 # SPDX-FileContributor: Antonio Niño Díaz, 2023
 
-BLOCKSDS	?= /opt/blocksds/core
-BLOCKSDSEXT	?= /opt/blocksds/external
+export BLOCKSDS			?= /opt/blocksds/core
+export BLOCKSDSEXT		?= /opt/blocksds/external
 
-WONDERFUL_TOOLCHAIN	?= /opt/wonderful
+export WONDERFUL_TOOLCHAIN	?= /opt/wonderful
 ARM_NONE_EABI_PATH	?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
 
 # Source code paths
@@ -79,18 +79,18 @@ SOURCES_CPP	:= $(shell find -L $(SOURCEDIRS) -name "*.cpp")
 # Compiler and linker flags
 # -------------------------
 
-DEFINES		+= -D__NDS__ -DARM7
+ARCH		:= -mthumb -mthumb-interwork -mcpu=arm7tdmi
 
-ARCH		:= -mcpu=arm7tdmi -mtune=arm7tdmi
+SPECS		:= $(CURDIR)/load.specs
 
 WARNFLAGS	:= -Wall
 
 ifeq ($(SOURCES_CPP),)
-    LD		:= $(CC)
-    LIBS	+= -lc
+	LD	:= $(CC)
+	LIBS	+= -lc
 else
-    LD		:= $(CXX)
-    LIBS	+= -lstdc++ -lc
+	LD	:= $(CXX)
+	LIBS	+= -lstdc++ -lc
 endif
 
 INCLUDEFLAGS	:= $(foreach path,$(INCLUDEDIRS),-I$(path)) \
@@ -98,26 +98,20 @@ INCLUDEFLAGS	:= $(foreach path,$(INCLUDEDIRS),-I$(path)) \
 
 LIBDIRSFLAGS	:= $(foreach path,$(LIBDIRS),-L$(path)/lib)
 
-ASFLAGS		+= -x assembler-with-cpp $(DEFINES) $(ARCH) \
-		   -mthumb -mthumb-interwork $(INCLUDEFLAGS) \
-		   -ffunction-sections -fdata-sections
+ASFLAGS		+= -x assembler-with-cpp $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -ffunction-sections -fdata-sections
 
-CFLAGS		+= -std=gnu11 $(WARNFLAGS) $(DEFINES) $(ARCH) \
-		   -mthumb -mthumb-interwork $(INCLUDEFLAGS) -Os \
-		   -ffunction-sections -fdata-sections \
-		   -fomit-frame-pointer
+CFLAGS		+= -std=gnu11 $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -Oz -flto -ffunction-sections -fdata-sections \
+		   -specs=$(SPECS)
 
-CXXFLAGS	+= -std=gnu++14 $(WARNFLAGS) $(DEFINES) $(ARCH) \
-		   -mthumb -mthumb-interwork $(INCLUDEFLAGS) -Os \
-		   -ffunction-sections -fdata-sections \
+CXXFLAGS	+= -std=gnu++14 $(WARNFLAGS) $(DEFINES) $(INCLUDEFLAGS) \
+		   $(ARCH) -Oz -flto -ffunction-sections -fdata-sections \
 		   -fno-exceptions -fno-rtti \
-		   -fomit-frame-pointer
+		   -specs=$(SPECS)
 
-LDFLAGS		:= -mthumb -mthumb-interwork $(LIBDIRSFLAGS) \
-		   -Wl,-Map,$(MAP) -Wl,--gc-sections -nostartfiles -nostdlib \
-		   -T./load.ld \
-		   -Wl,--no-warn-rwx-segments \
-		   -Wl,--start-group $(LIBS) -lgcc -Wl,--end-group
+LDFLAGS		:= $(ARCH) $(LIBDIRSFLAGS) -Wl,-Map,$(MAP) $(DEFINES) \
+		   -Wl,--start-group $(LIBS) -Wl,--end-group -specs=$(SPECS) -nostartfiles
 
 # Intermediate build files
 # ------------------------
