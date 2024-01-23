@@ -20,11 +20,11 @@ BINDIRS		:=
 
 DEFINES		:=
 
-ifeq ($(strip $(NO_SDMMC)),)
+ifneq ($(strip $(NO_SDMMC)),)
 DEFINES		+= -DNO_SDMMC
 endif
 
-ifeq ($(strip $(NO_DLDI)),)
+ifneq ($(strip $(NO_DLDI)),)
 DEFINES		+= -DNO_DLDI
 endif
 
