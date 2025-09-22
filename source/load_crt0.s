@@ -21,7 +21,7 @@
 ------------------------------------------------------------------*/
 
 @---------------------------------------------------------------------------------
-	.section ".init"
+	.section ".crt0", "ax"
 	.global _start
 	.global storedFileCluster
 	.global initDisc
@@ -46,7 +46,7 @@ wantToPatchDLDI:
 	.word	0x00000001		@ by default patch the DLDI section of the loaded NDS
 @ Used for passing arguments to the loaded app
 argStart:
-	.word	_end - _start
+	.word	__arm7_end__ - _start
 argSize:
 	.word	0x00000000
 dldiOffset:
@@ -76,7 +76,7 @@ startUp:
 	ldr	sp, =__sp_usr		@ Set user stack
 
 	ldr	r0, =__bss_start	@ Clear BSS section to 0x00
-	ldr	r1, =__bss_end
+	ldr	r1, =__bss_end__
 	sub	r1, r1, r0
 	bl	ClearMem
 
